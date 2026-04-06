@@ -1,0 +1,34 @@
+﻿Analyzing easy_cafe...                                          
+
+   info - Unnecessary use of multiple underscores - lib\screens\admin\menu_screen.dart:124:53 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\admin\menu_screen.dart:124:57 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\admin\menu_screen.dart:224:45 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\admin\menu_screen.dart:224:49 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\admin\menu_screen.dart:230:51 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\admin\menu_screen.dart:230:55 - unnecessary_underscores
+   info - Unnecessary use of string interpolation - lib\screens\user\notes_screen.dart:186:26 - unnecessary_string_interpolations
+   info - Unnecessary use of string interpolation - lib\screens\user\notes_screen.dart:214:26 - unnecessary_string_interpolations
+   info - Unnecessary use of multiple underscores - lib\screens\user\orders_screen.dart:154:37 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\user\orders_screen.dart:154:41 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\widgets\app_top_bar.dart:60:47 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\widgets\app_top_bar.dart:60:51 - unnecessary_underscores
+  error - The name 'MyApp' isn't a class - test\widget_test.dart:16:35 - creation_with_non_type
+
+flutter : 13 issues 
+found. (ran in 9.7s)
+At line:1 char:1
++ flutter analyze 2>&1 | 
+Out-File -FilePath 
+analyze_output.txt 
+-Encodin ...
++ ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo       
+       : NotSpeci    
+fied: (13 issues     
+found. (ran in 9.    
+7s):String) [], R    
+emoteException
+    + FullyQualifiedE    
+rrorId : NativeCo    
+mmandError
+ 
