@@ -1,4 +1,5 @@
 class MenuItem {
+  final String? id;
   final String name;
   final double price;
   final String description;
@@ -7,6 +8,7 @@ class MenuItem {
   bool inStock;
 
   MenuItem({
+    this.id,
     required this.name,
     required this.price,
     required this.description,
@@ -14,6 +16,50 @@ class MenuItem {
     required this.imageUrl,
     this.inStock = true,
   });
+
+  factory MenuItem.fromMap(Map<String, dynamic> map) {
+    return MenuItem(
+      id: map['id'] as String?,
+      name: map['name'] as String? ?? 'Unnamed Item',
+      price: (map['price'] as num?)?.toDouble() ?? 0.0,
+      description: map['description'] as String? ?? '',
+      category: map['category'] as String? ?? 'Other',
+      imageUrl: map['image_url'] as String? ?? '',
+      inStock: map['in_stock'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      if (id != null) 'id': id,
+      'name': name,
+      'price': price,
+      'description': description,
+      'category': category,
+      'image_url': imageUrl,
+      'in_stock': inStock,
+    };
+  }
+
+  MenuItem copyWith({
+    String? id,
+    String? name,
+    double? price,
+    String? description,
+    String? category,
+    String? imageUrl,
+    bool? inStock,
+  }) {
+    return MenuItem(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      price: price ?? this.price,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      imageUrl: imageUrl ?? this.imageUrl,
+      inStock: inStock ?? this.inStock,
+    );
+  }
 }
 
 class CartItem {

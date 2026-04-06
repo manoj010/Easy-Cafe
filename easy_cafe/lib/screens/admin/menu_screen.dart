@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
-import '../../data/sample_data.dart';
 import '../../models/models.dart';
 
 class MenuScreen extends StatefulWidget {
@@ -12,12 +12,101 @@ class MenuScreen extends StatefulWidget {
 }
 
 class _MenuScreenState extends State<MenuScreen> {
-  late List<MenuItem> _items;
+  final _supabase = Supabase.instance.client;
+  late Stream<List<MenuItem>> _menuStream;
 
   @override
   void initState() {
     super.initState();
-    _items = List.from(SampleData.adminMenuItems);
+    debugPrint('MenuScreen: Initializing Supabase stream...');
+    _menuStream = _supabase
+        .from('menu_items')
+        .stream(primaryKey: ['id'])
+        .order('created_at')
+        .map((data) {
+          debugPrint('MenuScreen: Received data from Supabase: ${data.length} items');
+          return data.map((map) => MenuItem.fromMap(map)).toList();
+        });
+  }
+
+  Future<void> _addMenuItem(MenuItem item) async {
+    try {
+      await _supabase.from('menu_items').insert(item.toMap());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error adding item: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleInStock(MenuItem item) async {
+    try {
+      await _supabase.from('menu_items').update({'in_stock': !item.inStock}).eq('id', item.id!);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating item: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteMenuItem(MenuItem item) async {
+    try {
+      await _supabase.from('menu_items').delete().eq('id', item.id!);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting item: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showAddItemDialog() {
+    final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final priceController = TextEditingController();
+    final categoryController = TextEditingController();
+    final imageUrlController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add New Menu Item', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name')),
+              TextField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Description')),
+              TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Price'), keyboardType: TextInputType.number),
+              TextField(controller: categoryController, decoration: const InputDecoration(labelText: 'Category')),
+              TextField(controller: imageUrlController, decoration: const InputDecoration(labelText: 'Image URL')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final item = MenuItem(
+                name: nameController.text,
+                description: descriptionController.text,
+                price: double.tryParse(priceController.text) ?? 1.99,
+                category: categoryController.text,
+                imageUrl: imageUrlController.text,
+              );
+              _addMenuItem(item);
+              Navigator.pop(context);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -52,20 +141,23 @@ class _MenuScreenState extends State<MenuScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.leatherGradient,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4))],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.add, size: 18, color: Colors.white),
-                        const SizedBox(width: 8),
-                        Text('Add Item', style: GoogleFonts.manrope(fontWeight: FontWeight.w600, color: Colors.white)),
-                      ],
+                  GestureDetector(
+                    onTap: _showAddItemDialog,
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.leatherGradient,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4))],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.add, size: 18, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text('Add Item', style: GoogleFonts.manrope(fontWeight: FontWeight.w600, color: Colors.white)),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -77,10 +169,30 @@ class _MenuScreenState extends State<MenuScreen> {
               const SizedBox(height: 20),
 
               // Menu Items
-              ..._items.map((item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _buildMenuCard(item),
-                  )),
+                  StreamBuilder<List<MenuItem>>(
+                    stream: _menuStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        debugPrint('MenuScreen: StreamBuilder Error (Menu Items): ${snapshot.error}');
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
+                      }
+                      if (snapshot.hasError) {
+                        return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Error: ${snapshot.error}')));
+                      }
+                      final items = snapshot.data ?? [];
+                      if (items.isEmpty) {
+                        return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('No menu items found. Add some!', style: GoogleFonts.manrope())));
+                      }
+                      return Column(
+                        children: items.map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: _buildMenuCard(item),
+                        )).toList(),
+                      );
+                    },
+                  ),
             ]),
           ),
         ),
@@ -111,22 +223,28 @@ class _MenuScreenState extends State<MenuScreen> {
                   Row(
                     children: [
                       ...List.generate(3, (i) {
-                        final urls = SampleData.adminMenuItems.map((m) => m.imageUrl).toList();
-                        return Container(
-                          margin: EdgeInsets.only(left: i == 0 ? 0 : 0),
-                          transform: Matrix4.translationValues(i * -12.0, 0, 0),
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.surfaceContainerLow, width: 3),
-                            ),
-                            child: ClipOval(
-                              child: Image.network(urls[i], fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(color: AppColors.surfaceContainerHighest)),
-                            ),
-                          ),
+                        return StreamBuilder<List<MenuItem>>(
+                          stream: _menuStream,
+                          builder: (context, snapshot) {
+                            final urls = (snapshot.data ?? []).map((m) => m.imageUrl).toList();
+                            if (urls.length <= i) return const SizedBox.shrink();
+                            return Container(
+                              margin: EdgeInsets.only(left: i == 0 ? 0 : 0),
+                              transform: Matrix4.translationValues(i * -12.0, 0, 0),
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.surfaceContainerLow, width: 3),
+                                ),
+                                child: ClipOval(
+                                  child: Image.network(urls[i], fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(color: AppColors.surfaceContainerHighest)),
+                                ),
+                              ),
+                            );
+                          }
                         );
                       }),
                       Transform.translate(
@@ -146,13 +264,19 @@ class _MenuScreenState extends State<MenuScreen> {
                       ),
                     ],
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('84', style: GoogleFonts.plusJakartaSans(fontSize: 36, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                      Text('Live across 6 categories', style: GoogleFonts.manrope(fontSize: 12, color: AppColors.onSurfaceVariant)),
-                    ],
-                  ),
+                      StreamBuilder<List<MenuItem>>(
+                        stream: _menuStream,
+                        builder: (context, snapshot) {
+                          final count = snapshot.data?.length ?? 0;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('$count', style: GoogleFonts.plusJakartaSans(fontSize: 36, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                              Text('Live across categories', style: GoogleFonts.manrope(fontSize: 12, color: AppColors.onSurfaceVariant)),
+                            ],
+                          );
+                        }
+                      ),
                 ],
               ),
             ],
@@ -283,13 +407,16 @@ class _MenuScreenState extends State<MenuScreen> {
                   children: [
                     _iconBtn(Icons.edit, AppColors.onSurfaceVariant),
                     const SizedBox(width: 8),
-                    _iconBtn(Icons.delete, AppColors.onSurfaceVariant),
+                    GestureDetector(
+                      onTap: () => _deleteMenuItem(item),
+                      child: _iconBtn(Icons.delete, AppColors.onSurfaceVariant),
+                    ),
                   ],
                 ),
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: () => setState(() => item.inStock = !item.inStock),
+                      onTap: () => _toggleInStock(item),
                       child: Container(
                         width: 44,
                         height: 24,
