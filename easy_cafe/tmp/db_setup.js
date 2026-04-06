@@ -16,7 +16,7 @@ async function runSql() {
     await client.connect();
     console.log('CONNECTED successfully!');
     
-    const sql = fs.readFileSync('tmp/create_menu_table.sql', 'utf8');
+    const sql = fs.readFileSync('tmp/setup_storage.sql', 'utf8');
     await client.query(sql);
     
     console.log('SUCCESS: Menu items table and policies created!');

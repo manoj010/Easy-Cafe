@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../theme/app_colors.dart';
 import '../../models/models.dart';
 
@@ -13,6 +15,8 @@ class MenuScreen extends StatefulWidget {
 
 class _MenuScreenState extends State<MenuScreen> {
   final _supabase = Supabase.instance.client;
+  final _picker = ImagePicker();
+  bool _isUploading = false;
   late Stream<List<MenuItem>> _menuStream;
 
   @override
@@ -65,46 +69,125 @@ class _MenuScreenState extends State<MenuScreen> {
     }
   }
 
+  Future<String?> _uploadImage(XFile file) async {
+    try {
+      setState(() => _isUploading = true);
+      final bytes = await file.readAsBytes();
+      final fileExt = file.path.split('.').last;
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final filePath = 'menu/$fileName';
+
+      await _supabase.storage.from('menu_images').uploadBinary(
+            filePath,
+            bytes,
+            fileOptions: FileOptions(contentType: 'image/$fileExt'),
+          );
+
+      final imageUrl = _supabase.storage.from('menu_images').getPublicUrl(filePath);
+      debugPrint('MenuScreen: Upload Success! Image Public URL: $imageUrl');
+      return imageUrl;
+    } catch (e) {
+      debugPrint('MenuScreen: Error uploading image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+      return null;
+    } finally {
+      setState(() => _isUploading = false);
+    }
+  }
+
   void _showAddItemDialog() {
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
     final priceController = TextEditingController();
     final categoryController = TextEditingController();
     final imageUrlController = TextEditingController();
+    File? pickedFile;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Add New Menu Item', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name')),
-              TextField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Description')),
-              TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Price'), keyboardType: TextInputType.number),
-              TextField(controller: categoryController, decoration: const InputDecoration(labelText: 'Category')),
-              TextField(controller: imageUrlController, decoration: const InputDecoration(labelText: 'Image URL')),
-            ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Add New Menu Item', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Image Picker Preview
+                GestureDetector(
+                  onTap: () async {
+                    try {
+                      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                      if (image != null) {
+                        setDialogState(() => pickedFile = File(image.path));
+                        final uploadedUrl = await _uploadImage(image);
+                        if (uploadedUrl != null) {
+                          imageUrlController.text = uploadedUrl;
+                          setDialogState(() {});
+                        }
+                      }
+                    } catch (e) {
+                      debugPrint('MenuScreen: Error picking image: $e');
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error picking image: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  },
+                  child: Container(
+                    height: 120,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: pickedFile != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(pickedFile!, fit: BoxFit.cover),
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_a_photo, color: AppColors.primary, size: 32),
+                              const SizedBox(height: 8),
+                              Text('Upload Photo', style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                            ],
+                          ),
+                  ),
+                ),
+                if (_isUploading) const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
+                const SizedBox(height: 16),
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name')),
+                TextField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Description')),
+                TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Price'), keyboardType: TextInputType.number),
+                TextField(controller: categoryController, decoration: const InputDecoration(labelText: 'Category')),
+                TextField(controller: imageUrlController, decoration: const InputDecoration(labelText: 'Image URL')),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final item = MenuItem(
+                  name: nameController.text,
+                  description: descriptionController.text,
+                  price: double.tryParse(priceController.text) ?? 1.99,
+                  category: categoryController.text,
+                  imageUrl: imageUrlController.text,
+                );
+                _addMenuItem(item);
+                Navigator.pop(context);
+              },
+              child: const Text('Add'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final item = MenuItem(
-                name: nameController.text,
-                description: descriptionController.text,
-                price: double.tryParse(priceController.text) ?? 1.99,
-                category: categoryController.text,
-                imageUrl: imageUrlController.text,
-              );
-              _addMenuItem(item);
-              Navigator.pop(context);
-            },
-            child: const Text('Add'),
-          ),
-        ],
       ),
     );
   }
